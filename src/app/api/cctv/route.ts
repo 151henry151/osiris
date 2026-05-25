@@ -312,7 +312,7 @@ function getRegionsForBounds(lat: number, lng: number, radius: number): string[]
   // US-Central
   if (lat > 24 && lat < 49 && lng > -105 && lng < -80) regions.push('usa-live');
   // Canada
-  if (lat > 42 && lat < 70 && lng > -141 && lng < -52) regions.push('canada');
+  if (lat > 45.2 && lat < 70 && lng > -141 && lng < -52) regions.push('canada');
   // Europe
   const inBulgaria = lat > 41 && lat < 44.5 && lng > 22 && lng < 29.5;
   const inGreece = lat > 34.5 && lat < 41.8 && lng > 19 && lng < 30;

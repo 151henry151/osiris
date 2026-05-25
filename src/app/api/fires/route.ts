@@ -12,14 +12,41 @@ export async function GET() {
   try {
     let fires: any[] = [];
     let source = '';
+    const firmsApiKey = process.env.FIRMS_API_KEY?.trim();
 
-    // Source 1: NASA FIRMS Open Data (Global 24h CSV) - no API key needed
-    const firmsSources = [
-      'https://firms.modaps.eosdis.nasa.gov/data/active_fire/suomi-npp-viirs-c2/csv/SUOMI_VIIRS_C2_Global_24h.csv',
-      'https://firms.modaps.eosdis.nasa.gov/data/active_fire/modis-c6.1/csv/MODIS_C6_1_Global_24h.csv'
-    ];
+    // Source 1: NASA FIRMS. Prefer the keyed API when configured, then fall
+    // back to the open CSVs so the fire layer still works without credentials.
+    const firmsSources = firmsApiKey
+      ? [
+          {
+            url: `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${encodeURIComponent(firmsApiKey)}/VIIRS_SNPP_NRT/world/1`,
+            label: 'NASA-FIRMS API (VIIRS)',
+          },
+          {
+            url: `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${encodeURIComponent(firmsApiKey)}/MODIS_NRT/world/1`,
+            label: 'NASA-FIRMS API (MODIS)',
+          },
+          {
+            url: 'https://firms.modaps.eosdis.nasa.gov/data/active_fire/suomi-npp-viirs-c2/csv/SUOMI_VIIRS_C2_Global_24h.csv',
+            label: 'NASA-FIRMS (VIIRS)',
+          },
+          {
+            url: 'https://firms.modaps.eosdis.nasa.gov/data/active_fire/modis-c6.1/csv/MODIS_C6_1_Global_24h.csv',
+            label: 'NASA-FIRMS (MODIS)',
+          },
+        ]
+      : [
+          {
+            url: 'https://firms.modaps.eosdis.nasa.gov/data/active_fire/suomi-npp-viirs-c2/csv/SUOMI_VIIRS_C2_Global_24h.csv',
+            label: 'NASA-FIRMS (VIIRS)',
+          },
+          {
+            url: 'https://firms.modaps.eosdis.nasa.gov/data/active_fire/modis-c6.1/csv/MODIS_C6_1_Global_24h.csv',
+            label: 'NASA-FIRMS (MODIS)',
+          },
+        ];
 
-    for (const url of firmsSources) {
+    for (const { url, label } of firmsSources) {
       try {
         const res = await fetch(url, {
           signal: AbortSignal.timeout(15000),
@@ -31,7 +58,7 @@ export async function GET() {
             const parsed = parseCSV(text);
             if (parsed.length > 0) {
               fires = parsed;
-              source = url.includes('SUOMI') ? 'NASA-FIRMS (VIIRS)' : 'NASA-FIRMS (MODIS)';
+              source = label;
               break;
             }
           }

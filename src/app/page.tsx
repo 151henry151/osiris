@@ -312,7 +312,13 @@ export default function Dashboard() {
     }
     // CCTV
     if (activeLayers.cctv && !layerFetchedRef.current.has('cctv')) {
-      fetchEndpoint('/api/cctv?region=all');
+      fetchEndpoint('/api/cctv?region=vermont');
+      setTimeout(() => {
+        fetchEndpoint('/api/cctv?region=usa-live', d => ({
+          ...d,
+          cameras: [...(dataRef.current.cameras || []), ...(d.cameras || [])],
+        }));
+      }, 5000);
       layerFetchedRef.current.add('cctv');
     }
     // Maritime

@@ -2,8 +2,16 @@ import type { CctvCamera } from './types';
 
 const C2C_URL = 'https://nec-por.ne-compass.com/NEC.XmlDataPortal/api/c2c';
 const SNAPSHOT_FRESHNESS_MS = 30 * 60 * 1000;
+const CACHE_TTL_MS = 60 * 1000;
 
 type NewEnglandNetwork = 'Maine' | 'NewHampshire' | 'Vermont';
+type NetworkCache = {
+  expiresAt: number;
+  promise?: Promise<CctvCamera[]>;
+  cameras?: CctvCamera[];
+};
+
+const networkCache = new Map<NewEnglandNetwork, NetworkCache>();
 
 function ne511ImageUrl(network: NewEnglandNetwork, cameraId: string): string {
   const refreshBucket = Math.floor(Date.now() / 60000);
@@ -36,11 +44,17 @@ function parseNeTimestamp(value: string | undefined): number | null {
   return Date.parse(`${year}-${month}-${day}T${hour}:${minute}:${second}${offset}`);
 }
 
-async function fetchNewEngland511NetworkCameras(network: NewEnglandNetwork, stateName: string): Promise<CctvCamera[]> {
+async function loadNewEngland511NetworkCameras(network: NewEnglandNetwork, stateName: string): Promise<CctvCamera[]> {
   try {
     const [statusRes, snapshotRes] = await Promise.all([
-      fetch(`${C2C_URL}?networks=${network}&dataTypes=cctvStatusData`, { signal: AbortSignal.timeout(20000) }),
-      fetch(`${C2C_URL}?networks=${network}&dataTypes=cctvSnapshotData`, { signal: AbortSignal.timeout(45000) }),
+      fetch(`${C2C_URL}?networks=${network}&dataTypes=cctvStatusData`, {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(20000),
+      }),
+      fetch(`${C2C_URL}?networks=${network}&dataTypes=cctvSnapshotData`, {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(45000),
+      }),
     ]);
     if (!statusRes.ok) return [];
 
@@ -93,6 +107,21 @@ async function fetchNewEngland511NetworkCameras(network: NewEnglandNetwork, stat
   } catch {
     return [];
   }
+}
+
+async function fetchNewEngland511NetworkCameras(network: NewEnglandNetwork, stateName: string): Promise<CctvCamera[]> {
+  const cached = networkCache.get(network);
+  if (cached && cached.expiresAt > Date.now()) {
+    if (cached.cameras) return cached.cameras;
+    if (cached.promise) return cached.promise;
+  }
+
+  const promise = loadNewEngland511NetworkCameras(network, stateName).then((cameras) => {
+    networkCache.set(network, { cameras, expiresAt: Date.now() + CACHE_TTL_MS });
+    return cameras;
+  });
+  networkCache.set(network, { promise, expiresAt: Date.now() + CACHE_TTL_MS });
+  return promise;
 }
 
 /** Vermont DOT / New England 511 traffic cameras with fresh snapshots only. */

@@ -15,6 +15,8 @@ const REGIONS = [
   { lat: 0.0, lon: 20.0, dist: 2500 },      // Africa
   { lat: -15.0, lon: -60.0, dist: 2000 },   // South America
 ];
+const OPENSKY_TOKEN_URL = 'https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token';
+const OPENSKY_STATES_URL = 'https://opensky-network.org/api/states/all';
 
 // Helicopter type codes
 const HELI_TYPES = new Set([
@@ -52,6 +54,106 @@ const MILITARY_INDICATORS = new Set([
 ]);
 
 const AIRLINE_CODE_RE = /^([A-Z]{3})\d/;
+
+const globalForOpenSky = globalThis as unknown as {
+  openSkyToken?: string;
+  openSkyTokenExpiresAt?: number;
+  openSkyTokenPromise?: Promise<string | null>;
+};
+
+async function getOpenSkyToken(): Promise<string | null> {
+  const clientId = process.env.OPENSKY_CLIENT_ID?.trim();
+  const clientSecret = process.env.OPENSKY_CLIENT_SECRET?.trim();
+  if (!clientId || !clientSecret) return null;
+
+  const now = Date.now();
+  if (globalForOpenSky.openSkyToken && (globalForOpenSky.openSkyTokenExpiresAt || 0) > now + 60_000) {
+    return globalForOpenSky.openSkyToken;
+  }
+  if (globalForOpenSky.openSkyTokenPromise) return globalForOpenSky.openSkyTokenPromise;
+
+  globalForOpenSky.openSkyTokenPromise = (async () => {
+    try {
+      const body = new URLSearchParams({
+        grant_type: 'client_credentials',
+        client_id: clientId,
+        client_secret: clientSecret,
+      });
+      const res = await fetch(OPENSKY_TOKEN_URL, {
+        method: 'POST',
+        body,
+        signal: AbortSignal.timeout(15000),
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      const token = typeof data.access_token === 'string' ? data.access_token : null;
+      if (!token) return null;
+
+      const expiresIn = typeof data.expires_in === 'number' ? data.expires_in : 1800;
+      globalForOpenSky.openSkyToken = token;
+      globalForOpenSky.openSkyTokenExpiresAt = Date.now() + Math.max(60, expiresIn - 60) * 1000;
+      return token;
+    } catch {
+      return null;
+    } finally {
+      globalForOpenSky.openSkyTokenPromise = undefined;
+    }
+  })();
+
+  return globalForOpenSky.openSkyTokenPromise;
+}
+
+function openSkyStateToAdsbLike(state: any[]): any | null {
+  const [icao24, callsign, , , , longitude, latitude, baroAltitude, onGround, velocity, trueTrack, , , geoAltitude, squawk] = state;
+  if (typeof latitude !== 'number' || typeof longitude !== 'number') return null;
+
+  return {
+    hex: typeof icao24 === 'string' ? icao24 : '',
+    flight: typeof callsign === 'string' ? callsign.trim() : '',
+    lat: latitude,
+    lon: longitude,
+    alt_baro: typeof baroAltitude === 'number' ? Math.round(baroAltitude / 0.3048) : 0,
+    gs: typeof velocity === 'number' ? Math.round(velocity * 1.94384 * 10) / 10 : null,
+    track: typeof trueTrack === 'number' ? trueTrack : 0,
+    squawk: typeof squawk === 'string' ? squawk : '',
+    alt_geom: typeof geoAltitude === 'number' ? Math.round(geoAltitude / 0.3048) : undefined,
+    t: '',
+    r: 'N/A',
+    dbFlags: 0,
+    on_ground: Boolean(onGround),
+  };
+}
+
+async function fetchOpenSkyFlights(): Promise<any[]> {
+  const token = await getOpenSkyToken();
+  if (!token) return [];
+
+  try {
+    const res = await fetch(OPENSKY_STATES_URL, {
+      signal: AbortSignal.timeout(30000),
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (res.status === 401) {
+      globalForOpenSky.openSkyToken = undefined;
+      globalForOpenSky.openSkyTokenExpiresAt = 0;
+      return [];
+    }
+    if (!res.ok) return [];
+
+    const data = await res.json();
+    const states = Array.isArray(data.states) ? data.states : [];
+    return states.map(openSkyStateToAdsbLike).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
 
 async function fetchRegion(region: typeof REGIONS[0]): Promise<any[]> {
   try {
@@ -162,21 +264,32 @@ export async function GET() {
 
   // Start new global fetch
   fetchPromise = (async () => {
-    // Fetch all 6 regions in parallel
-    const regionResults = await Promise.allSettled(
-      REGIONS.map(r => fetchRegion(r))
-    );
-
     const allRaw: any[] = [];
     const seenHex = new Set<string>();
 
-    for (const result of regionResults) {
-      if (result.status === 'fulfilled') {
-        for (const ac of result.value) {
-          const hex = (ac.hex || '').toLowerCase().trim();
-          if (hex && !seenHex.has(hex)) {
-            seenHex.add(hex);
-            allRaw.push(ac);
+    const openSkyFlights = await fetchOpenSkyFlights();
+    if (openSkyFlights.length > 0) {
+      for (const ac of openSkyFlights) {
+        const hex = (ac.hex || '').toLowerCase().trim();
+        if (hex && !seenHex.has(hex)) {
+          seenHex.add(hex);
+          allRaw.push(ac);
+        }
+      }
+    } else {
+      // Fallback: fetch all 6 adsb.lol regions in parallel.
+      const regionResults = await Promise.allSettled(
+        REGIONS.map(r => fetchRegion(r))
+      );
+
+      for (const result of regionResults) {
+        if (result.status === 'fulfilled') {
+          for (const ac of result.value) {
+            const hex = (ac.hex || '').toLowerCase().trim();
+            if (hex && !seenHex.has(hex)) {
+              seenHex.add(hex);
+              allRaw.push(ac);
+            }
           }
         }
       }
@@ -221,6 +334,7 @@ export async function GET() {
       military_flights: military,
       gps_jamming: jammingZones,
       total: allRaw.length,
+      source: openSkyFlights.length > 0 ? 'OpenSky Network' : 'adsb.lol',
       timestamp: new Date().toISOString(),
     };
   })();

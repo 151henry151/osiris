@@ -18,8 +18,8 @@ export async function GET(request: Request) {
 
   try {
     const res = await fetch(`${SNAPSHOT_URL}?networks=${encodeURIComponent(network)}&dataTypes=cctvSnapshotData`, {
+      cache: 'no-store',
       signal: AbortSignal.timeout(45000),
-      next: { revalidate: 60 },
     });
     if (!res.ok) {
       return NextResponse.json({ error: 'Snapshot feed unavailable' }, { status: 502 });

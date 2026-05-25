@@ -4,10 +4,9 @@ OSIRIS ships as a self-contained Next.js standalone build. This guide covers
 running it with Docker / Docker Compose, deploying it as a [CasaOS](https://casaos.io)
 app, and configuring the optional API keys.
 
-> **TL;DR:** OSIRIS runs fully **without any API keys**. All core feeds
-> (aviation, satellites, fires, earthquakes, weather, news, CVEs) use public
-> keyless sources. Keys only matter for the optional RECON scanner backend and
-> for raising rate limits on a few feeds.
+> **TL;DR:** OSIRIS runs fully **without any API keys**. Some routes can use
+> optional keys for richer or higher-limit sources, while falling back to public
+> feeds when those keys are absent.
 
 ---
 
@@ -125,18 +124,14 @@ Copy `.env.template` to `.env` and fill in only what you need.
 Without `SCANNER_URL`/`SCANNER_KEY` the RECON endpoints return `503` and the
 rest of OSIRIS works normally. Generate a key with `openssl rand -hex 32`.
 
-### Optional keys (reserved / for higher rate limits)
-
-These are documented for completeness and forward-compatibility. The current
-data routes use **keyless** public feeds, so these are not consumed yet — set
-them only if you extend the relevant route or hit rate limits.
+### Optional keys
 
 | Variable | Service | How to get it (all free) |
 |----------|---------|--------------------------|
-| `FIRMS_API_KEY` | NASA FIRMS active fires | Enter an email at <https://firms.modaps.eosdis.nasa.gov/api/map_key/> — the `MAP_KEY` is emailed instantly. Limit 5000 req / 10 min. |
-| `OPENSKY_CLIENT_ID` / `OPENSKY_CLIENT_SECRET` | OpenSky aviation | Create an account at <https://opensky-network.org/>, open **Account → API client**, create a client and copy id/secret. **OAuth2 only since March 2025** (username/password auth removed). |
-| `N2YO_API_KEY` | N2YO satellites | Register at <https://www.n2yo.com/login/register/>, then **Profile → generate API key**. Limit 1000 req / hour; key can't be regenerated. |
-| `AIS_API_KEY` | aisstream.io maritime | Sign up at <https://aisstream.io/>, create a key on the **API Keys** page. Used over `wss://stream.aisstream.io/v0/stream`. |
+| `FIRMS_API_KEY` | NASA FIRMS active fires | Prefer the keyed FIRMS API, with public CSV fallback. Enter an email at <https://firms.modaps.eosdis.nasa.gov/api/map_key/> — the `MAP_KEY` is emailed instantly. Limit 5000 req / 10 min. |
+| `OPENSKY_CLIENT_ID` / `OPENSKY_CLIENT_SECRET` | OpenSky aviation | Prefer authenticated OpenSky state vectors, with `adsb.lol` fallback. Create an account at <https://opensky-network.org/>, open **Account → API client**, create a client and copy id/secret. **OAuth2 only since March 2025** (username/password auth removed). |
+| `N2YO_API_KEY` | N2YO satellites | Stored for future satellite integrations; the current satellite layer uses CelesTrak TLEs. Register at <https://www.n2yo.com/login/register/>, then **Profile → generate API key**. Limit 1000 req / hour; key can't be regenerated. |
+| `AIS_API_KEY` | aisstream.io maritime | Enable live AIS ship positions over `wss://stream.aisstream.io/v0/stream`. Sign up at <https://aisstream.io/>, create a key on the **API Keys** page. |
 
 > Keep `.env` out of version control — it is already in `.gitignore`. Only
 > `.env.template` (no secrets) is committed.

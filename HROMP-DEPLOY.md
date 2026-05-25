@@ -43,6 +43,17 @@ Traffic cameras are loaded automatically from the NEC Compass data portal (same 
 
 The `usa-live` CCTV region uses [Road511](https://map.road511.com/) as the backbone for US state DOT cameras. OSIRIS filters out Road511 records unless they are marked active, recently updated, and expose a direct image URL or HLS stream. States with no public image/stream URL in Road511 are intentionally skipped rather than shown as unverified green dots.
 
+The frontend loads the smaller Vermont CCTV region first, then appends the nationwide `usa-live` region in the background. Camera media is not preloaded for every marker; image/HLS/iframe feeds load only after a marker is clicked.
+
+## Optional API keys
+
+Runtime keys live in the untracked `osiris/.env` file. This hromp deployment reads:
+
+- `FIRMS_API_KEY` — prefer the keyed NASA FIRMS API for active fire data, with public CSV fallback.
+- `OPENSKY_CLIENT_ID` / `OPENSKY_CLIENT_SECRET` — prefer authenticated OpenSky aircraft states, with `adsb.lol` fallback.
+- `AIS_API_KEY` — connect to aisstream.io for live ship positions.
+- `N2YO_API_KEY` — stored for N2YO integrations; the current satellite layer still uses CelesTrak TLEs.
+
 Optional REST API key (if you register at [Developer Portal](http://nec-por.ne-compass.com/DeveloperPortal)):
 
 ```bash
