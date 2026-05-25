@@ -163,9 +163,10 @@ async function fetchAvailableCamStreamerCameras(): Promise<CctvCamera[]> {
   return checks
     .filter(({ available }) => available)
     .map(({ camera }) => {
-      const { youtube_id, ...publicCamera } = camera;
+      const publicCamera: Partial<YoutubeCamera> = { ...camera };
+      delete publicCamera.youtube_id;
       return publicCamera;
-    });
+    }) as CctvCamera[];
 }
 
 export async function fetchVermontCameras(): Promise<CctvCamera[]> {

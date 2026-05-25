@@ -1,15 +1,14 @@
 import type { CctvCamera } from './types';
 
-const STATUS_URL =
-  'https://nec-por.ne-compass.com/NEC.XmlDataPortal/api/c2c?networks=Vermont&dataTypes=cctvStatusData';
-const SNAPSHOT_URL =
-  'https://nec-por.ne-compass.com/NEC.XmlDataPortal/api/c2c?networks=Vermont&dataTypes=cctvSnapshotData';
+const C2C_URL = 'https://nec-por.ne-compass.com/NEC.XmlDataPortal/api/c2c';
 const SNAPSHOT_FRESHNESS_MS = 30 * 60 * 1000;
 
-function ne511ImageUrl(cameraId: string): string {
+type NewEnglandNetwork = 'Maine' | 'NewHampshire' | 'Vermont';
+
+function ne511ImageUrl(network: NewEnglandNetwork, cameraId: string): string {
   const refreshBucket = Math.floor(Date.now() / 60000);
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH || process.env.OSIRIS_BASE_PATH || '';
-  return `${basePath}/api/cctv/ne511-image?id=${encodeURIComponent(cameraId)}&t=${refreshBucket}`;
+  return `${basePath}/api/cctv/ne511-image?network=${encodeURIComponent(network)}&id=${encodeURIComponent(cameraId)}&t=${refreshBucket}`;
 }
 
 function parseMicroCoord(value: string | null | undefined): number | null {
@@ -37,12 +36,11 @@ function parseNeTimestamp(value: string | undefined): number | null {
   return Date.parse(`${year}-${month}-${day}T${hour}:${minute}:${second}${offset}`);
 }
 
-/** Vermont DOT / New England 511 traffic cameras with fresh snapshots only. */
-export async function fetchNewEngland511VermontCameras(): Promise<CctvCamera[]> {
+async function fetchNewEngland511NetworkCameras(network: NewEnglandNetwork, stateName: string): Promise<CctvCamera[]> {
   try {
     const [statusRes, snapshotRes] = await Promise.all([
-      fetch(STATUS_URL, { signal: AbortSignal.timeout(20000) }),
-      fetch(SNAPSHOT_URL, { signal: AbortSignal.timeout(45000) }),
+      fetch(`${C2C_URL}?networks=${network}&dataTypes=cctvStatusData`, { signal: AbortSignal.timeout(20000) }),
+      fetch(`${C2C_URL}?networks=${network}&dataTypes=cctvSnapshotData`, { signal: AbortSignal.timeout(45000) }),
     ]);
     if (!statusRes.ok) return [];
 
@@ -80,13 +78,13 @@ export async function fetchNewEngland511VermontCameras(): Promise<CctvCamera[]> 
       if (!freshSnapshotIds.has(id)) continue;
 
       cams.push({
-        id: `ne511-vt-${id.replace(/\s+/g, '-').toLowerCase()}`,
+        id: `ne511-${network.toLowerCase()}-${id.replace(/\s+/g, '-').toLowerCase()}`,
         lat,
         lng,
         name,
-        city: 'Vermont',
+        city: stateName,
         country: 'US',
-        feed_url: ne511ImageUrl(id),
+        feed_url: ne511ImageUrl(network, id),
         external_url: 'https://newengland511.org/map',
         source: 'New England 511',
       });
@@ -95,6 +93,20 @@ export async function fetchNewEngland511VermontCameras(): Promise<CctvCamera[]> 
   } catch {
     return [];
   }
+}
+
+/** Vermont DOT / New England 511 traffic cameras with fresh snapshots only. */
+export async function fetchNewEngland511VermontCameras(): Promise<CctvCamera[]> {
+  return fetchNewEngland511NetworkCameras('Vermont', 'Vermont');
+}
+
+/** Non-Vermont New England 511 cameras for the nationwide US layer. */
+export async function fetchNewEngland511RegionalCameras(): Promise<CctvCamera[]> {
+  const results = await Promise.all([
+    fetchNewEngland511NetworkCameras('Maine', 'Maine'),
+    fetchNewEngland511NetworkCameras('NewHampshire', 'New Hampshire'),
+  ]);
+  return results.flat();
 }
 
 /** Optional REST API when NEW_ENGLAND_511_API_KEY is set (same schema as 511on.ca). */
@@ -121,7 +133,7 @@ export async function fetchNewEngland511ApiCameras(apiKey: string): Promise<Cctv
         views[0]?.url ||
         cam.ImageUrl ||
         cam.imageUrl ||
-        ne511ImageUrl(cam.Location || cam.location || id);
+        ne511ImageUrl('Vermont', cam.Location || cam.location || id);
       cams.push({
         id: `ne511-api-vt-${id}`,
         lat,

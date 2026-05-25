@@ -8,6 +8,7 @@ import { fetchTurkeyCameras } from './turkey';
 import { fetchRomaniaCameras } from './romania';
 import { fetchAustraliaCameras } from './australia';
 import { fetchVermontCameras } from './vermont';
+import { fetchUsLiveCameras } from './road511';
 
 /**
  * OSIRIS — Worldwide CCTV Camera API v2
@@ -291,7 +292,10 @@ const REGION_FETCHERS: Record<string, () => Promise<any[]>> = {
   'romania': fetchRomaniaCameras,
   'australia': fetchAustraliaCameras,
   'vermont': fetchVermontCameras,
+  'usa-live': fetchUsLiveCameras,
 };
+const LEGACY_US_REGIONS = new Set(['us-east', 'us-west', 'us-central']);
+const ALL_REGIONS = Object.keys(REGION_FETCHERS).filter((region) => !LEGACY_US_REGIONS.has(region));
 
 // Determine which regions to fetch based on viewport bounds
 function getRegionsForBounds(lat: number, lng: number, radius: number): string[] {
@@ -302,11 +306,11 @@ function getRegionsForBounds(lat: number, lng: number, radius: number): string[]
   const inVermont = lat > 42.5 && lat < 45.2 && lng > -73.6 && lng < -71.0;
   if (inVermont) regions.push('vermont');
   // US-East
-  if (lat > 24 && lat < 49 && lng > -85 && lng < -66) regions.push('us-east');
+  if (lat > 24 && lat < 49 && lng > -85 && lng < -66) regions.push('usa-live');
   // US-West
-  if (lat > 24 && lat < 49 && lng > -125 && lng < -100) regions.push('us-west');
+  if (lat > 24 && lat < 49 && lng > -125 && lng < -100) regions.push('usa-live');
   // US-Central
-  if (lat > 24 && lat < 49 && lng > -105 && lng < -80) regions.push('us-central');
+  if (lat > 24 && lat < 49 && lng > -105 && lng < -80) regions.push('usa-live');
   // Canada
   if (lat > 42 && lat < 70 && lng > -141 && lng < -52) regions.push('canada');
   // Europe
@@ -333,7 +337,7 @@ function getRegionsForBounds(lat: number, lng: number, radius: number): string[]
   // Australia explicitly
   if (lat > -45 && lat < -10 && lng > 110 && lng < 155) regions.push('asia');
 
-  return regions.length > 0 ? regions : ['uk', 'us-east']; // Default fallback
+  return regions.length > 0 ? [...new Set(regions)] : ['uk', 'usa-live']; // Default fallback
 }
 
 export async function GET(request: Request) {
@@ -347,7 +351,7 @@ export async function GET(request: Request) {
     let regionsToFetch: string[];
 
     if (region === 'all') {
-      regionsToFetch = Object.keys(REGION_FETCHERS);
+      regionsToFetch = ALL_REGIONS;
     } else if (region) {
       regionsToFetch = region.split(',').filter(r => r in REGION_FETCHERS);
     } else if (lat !== 0 || lng !== 0) {

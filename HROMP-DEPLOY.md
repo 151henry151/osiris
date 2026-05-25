@@ -11,6 +11,7 @@ Custom deployment of [simplifaisoul/osiris](https://github.com/simplifaisoul/osi
 - **`src/app/api/cctv/vermont.ts`** — live-only Vermont camera list: CamStreamer iframes (Sugarbush, Killington, Stratton, Bolton, Mad River Glen) and EarthCam Stowe
 - **`src/app/api/cctv/new-england-511.ts`** — **fresh VTrans / I-89 / I-91 traffic cameras** via public [NEC Compass](https://nec-por.ne-compass.com/DeveloperPortal) XML (no API key required). Cameras are included only when NEC reports the device online and provides a non-empty snapshot from the last 30 minutes.
 - **`src/app/api/cctv/ne511-image/route.ts`** — serves the NEC base64 JPG snapshots directly so the UI does not hit `newengland511.org/map/Cctv/GetCameraImage`, which can return a generic "No live camera feed" placeholder.
+- **`src/app/api/cctv/road511.ts`** — nationwide USA camera layer from Road511. Includes only cameras marked active, updated within 24 hours, and carrying an image URL or HLS stream URL; caps each state at 500 cameras to keep `region=all` responsive and avoid large states starving the rest.
 
 ## Deploy / rebuild
 
@@ -37,6 +38,10 @@ curl -sS 'https://hromp.com/osiris/api/cctv?region=vermont' | jq '.total,.source
 ## New England 511 (Vermont highway cameras)
 
 Traffic cameras are loaded automatically from the NEC Compass data portal (same source as [newengland511.org](https://newengland511.org/map)). No signup required for the default integration. Stale snapshot aggregators such as WorldCam are intentionally excluded from the Vermont CCTV layer.
+
+## Nationwide USA CCTV
+
+The `usa-live` CCTV region uses [Road511](https://map.road511.com/) as the backbone for US state DOT cameras. OSIRIS filters out Road511 records unless they are marked active, recently updated, and expose a direct image URL or HLS stream. States with no public image/stream URL in Road511 are intentionally skipped rather than shown as unverified green dots.
 
 Optional REST API key (if you register at [Developer Portal](http://nec-por.ne-compass.com/DeveloperPortal)):
 

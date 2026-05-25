@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 const SNAPSHOT_URL =
-  'https://nec-por.ne-compass.com/NEC.XmlDataPortal/api/c2c?networks=Vermont&dataTypes=cctvSnapshotData';
+  'https://nec-por.ne-compass.com/NEC.XmlDataPortal/api/c2c';
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -10,13 +10,14 @@ function escapeRegExp(value: string): string {
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
+  const network = searchParams.get('network') || 'Vermont';
 
   if (!id) {
     return NextResponse.json({ error: 'Missing camera id' }, { status: 400 });
   }
 
   try {
-    const res = await fetch(SNAPSHOT_URL, {
+    const res = await fetch(`${SNAPSHOT_URL}?networks=${encodeURIComponent(network)}&dataTypes=cctvSnapshotData`, {
       signal: AbortSignal.timeout(45000),
       next: { revalidate: 60 },
     });
