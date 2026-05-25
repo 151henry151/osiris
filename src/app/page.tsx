@@ -14,6 +14,7 @@ import ViewPresets from '@/components/ViewPresets';
 import KeyboardShortcuts from '@/components/KeyboardShortcuts';
 import GlobalStatusBar from '@/components/GlobalStatusBar';
 import LiveAlerts from '@/components/LiveAlerts';
+import { apiUrl } from '@/lib/api-url';
 
 const OsirisMap = dynamic(() => import('@/components/OsirisMap'), { ssr: false });
 const LayerPanel = dynamic(() => import('@/components/LayerPanel'));
@@ -82,7 +83,7 @@ export default function Dashboard() {
   const data = dataRef.current;
 
   const [backendStatus, setBackendStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
-  const [mapView, setMapView] = useState({ zoom: 2.5, latitude: 20 });
+  const [mapView, setMapView] = useState({ zoom: 7, latitude: 44.0, longitude: -72.7 });
   const [flyToLocation, setFlyToLocation] = useState<{ lat: number; lng: number; ts: number } | null>(null);
   const [mouseCoords, setMouseCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locationLabel, setLocationLabel] = useState('');
@@ -227,7 +228,7 @@ export default function Dashboard() {
   const handleRightClick = useCallback(async (coords: { lat: number; lng: number }) => {
     setDossierLoading(true); setRegionDossier(null);
     try {
-      const res = await fetch(`/api/region-dossier?lat=${coords.lat}&lng=${coords.lng}`);
+      const res = await fetch(apiUrl(`/api/region-dossier?lat=${coords.lat}&lng=${coords.lng}`));
       if (res.ok) setRegionDossier(await res.json());
     } catch (e) { console.warn('[OSIRIS] Suppressed error:', e instanceof Error ? e.message : e); } finally { setDossierLoading(false); }
   }, []);
@@ -246,7 +247,7 @@ export default function Dashboard() {
   const fetchEndpoint = useCallback(async (url: string, transform?: (d: any) => any, options?: RequestInit) => {
     if (typeof document !== 'undefined' && document.hidden) return;
     try {
-      const res = await fetch(url, options);
+      const res = await fetch(apiUrl(url), options);
       if (res.ok) {
         const json = await res.json();
         const d = transform ? transform(json) : json;
@@ -270,7 +271,7 @@ export default function Dashboard() {
     // Priority 2: Space Weather (needed for MarketsPanel)
     const spaceTimer = setTimeout(async () => {
       try {
-        const r = await fetch('/api/space-weather');
+        const r = await fetch(apiUrl('/api/space-weather'));
         if (r.ok) setSpaceWeather(await r.json());
       } catch (e) { console.warn('[OSIRIS] Suppressed error:', e instanceof Error ? e.message : e); }
     }, 5000);

@@ -7,6 +7,7 @@ import { fetchMacedoniaCameras } from './macedonia';
 import { fetchTurkeyCameras } from './turkey';
 import { fetchRomaniaCameras } from './romania';
 import { fetchAustraliaCameras } from './australia';
+import { fetchVermontCameras } from './vermont';
 
 /**
  * OSIRIS — Worldwide CCTV Camera API v2
@@ -289,6 +290,7 @@ const REGION_FETCHERS: Record<string, () => Promise<any[]>> = {
   'turkey': fetchTurkeyCameras,
   'romania': fetchRomaniaCameras,
   'australia': fetchAustraliaCameras,
+  'vermont': fetchVermontCameras,
 };
 
 // Determine which regions to fetch based on viewport bounds
@@ -296,6 +298,9 @@ function getRegionsForBounds(lat: number, lng: number, radius: number): string[]
   const regions: string[] = [];
   // UK
   if (lat > 49 && lat < 61 && lng > -8 && lng < 2) regions.push('uk');
+  // Vermont (curated ski, town, and public webcams)
+  const inVermont = lat > 42.5 && lat < 45.2 && lng > -73.6 && lng < -71.0;
+  if (inVermont) regions.push('vermont');
   // US-East
   if (lat > 24 && lat < 49 && lng > -85 && lng < -66) regions.push('us-east');
   // US-West
